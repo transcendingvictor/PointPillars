@@ -145,9 +145,11 @@ def main(args):
         if (epoch + 1) % args.ckpt_freq_epoch == 0:
             torch.save(pointpillars.state_dict(), os.path.join(saved_ckpt_path, f'epoch_{epoch+1}.pth'))
 
-        if epoch % 2 == 0:
-            continue
+        # if epoch % 2 == 0:
+        #     continue
         pointpillars.eval()
+        val_loss_dict = {'total_loss': 0, 'cls_loss': 0, 'reg_loss': 0, 'dir_cls_loss': 0}
+        val_batches = 0
         with torch.no_grad():
             for i, data_dict in enumerate(tqdm(val_dataloader)):
                 if not args.no_cuda:
@@ -199,12 +201,24 @@ def main(args):
                                     num_cls_pos=num_cls_pos, 
                                     batched_bbox_reg=batched_bbox_reg, 
                                     batched_dir_labels=batched_dir_labels)
+
+                # Accumulate losses
+                for key in val_loss_dict:
+                    val_loss_dict[key] += loss_dict[key]
+                val_batches += 1
+
+                # global_step = epoch * len(val_dataloader) + val_step + 1
+                # if global_step % args.log_freq == 0:
+                #     # save_summary(writer, loss_dict, global_step, 'val')
+                #     save_summary(loss_dict, global_step, 'val')
+                # val_step += 1
                 
-                global_step = epoch * len(val_dataloader) + val_step + 1
-                if global_step % args.log_freq == 0:
-                    # save_summary(writer, loss_dict, global_step, 'val')
-                    save_summary(loss_dict, global_step, 'val')
-                val_step += 1
+            # Average the validation losses
+            for key in val_loss_dict:
+                val_loss_dict[key] /= val_batches
+
+            # Log the averaged validation losses
+            save_summary(val_loss_dict, epoch + 1, 'val')
         pointpillars.train()
 
 
