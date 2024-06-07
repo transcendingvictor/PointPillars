@@ -75,6 +75,9 @@ def main(args):
     for epoch in range(args.max_epoch):
         print('=' * 20, epoch, '=' * 20)
         train_step, val_step = 0, 0
+        # Initialize loss accumulators
+        train_loss_dict = {'total_loss': 0, 'cls_loss': 0, 'reg_loss': 0, 'dir_cls_loss': 0}
+        train_batches = 0
         for i, data_dict in enumerate(tqdm(train_dataloader)):
             if not args.no_cuda:
                 # move the tensors to the cuda
@@ -133,15 +136,19 @@ def main(args):
             # torch.nn.utils.clip_grad_norm_(pointpillars.parameters(), max_norm=35)
             optimizer.step()
             scheduler.step()
+                        
+            # Accumulate losses
+            for key in train_loss_dict:
+                train_loss_dict[key] += loss_dict[key].item()
+            train_batches += 1
 
-            global_step = epoch * len(train_dataloader) + train_step + 1
-
-            if global_step % args.log_freq == 0:
-                # save_summary(writer, loss_dict, global_step, 'train',
-                save_summary(loss_dict, global_step, 'train',
-                             lr=optimizer.param_groups[0]['lr'], 
-                             momentum=optimizer.param_groups[0]['betas'][0])
             train_step += 1
+            
+        for key in train_loss_dict:
+            train_loss_dict[key] /= train_batches
+        save_summary(train_loss_dict, epoch + 1, 'train', lr=optimizer.param_groups[0]['lr'], momentum=optimizer.param_groups[0]['betas'][0])
+    
+            
         if (epoch + 1) % args.ckpt_freq_epoch == 0:
             torch.save(pointpillars.state_dict(), os.path.join(saved_ckpt_path, f'epoch_{epoch+1}.pth'))
 
