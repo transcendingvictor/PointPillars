@@ -8,19 +8,29 @@ from utils import setup_seed
 from dataset import Kitti, get_dataloader
 from model import PointPillars
 from loss import Loss
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 
-def save_summary(writer, loss_dict, global_step, tag, lr=None, momentum=None):
-    for k, v in loss_dict.items():
-        writer.add_scalar(f'{tag}/{k}', v, global_step)
+
+# def save_summary(writer, loss_dict, global_step, tag, lr=None, momentum=None):
+#     for k, v in loss_dict.items():
+#         writer.add_scalar(f'{tag}/{k}', v, global_step)
+#     if lr is not None:
+#         writer.add_scalar('lr', lr, global_step)
+#     if momentum is not None:
+#         writer.add_scalar('momentum', momentum, global_step)
+def save_summary(loss_dict, global_step, tag, lr=None, momentum=None):
+    log_dict = {f'{tag}/{k}': v for k, v in loss_dict.items()}
+    log_dict['global_step'] = global_step
     if lr is not None:
-        writer.add_scalar('lr', lr, global_step)
+        log_dict['lr'] = lr
     if momentum is not None:
-        writer.add_scalar('momentum', momentum, global_step)
-
+        log_dict['momentum'] = momentum
+    wandb.log(log_dict, step=global_step)
 
 def main(args):
+    wandb.init(project="PointPillars 3D Object Detection", config=args)
     setup_seed()
     train_dataset = Kitti(data_root=args.data_root,
                           split='train')
@@ -56,9 +66,9 @@ def main(args):
                                                     base_momentum=0.95*0.895, 
                                                     max_momentum=0.95,
                                                     div_factor=10)
-    saved_logs_path = os.path.join(args.saved_path, 'summary')
-    os.makedirs(saved_logs_path, exist_ok=True)
-    writer = SummaryWriter(saved_logs_path)
+    # saved_logs_path = os.path.join(args.saved_path, 'summary')
+    # os.makedirs(saved_logs_path, exist_ok=True)
+    # writer = SummaryWriter(saved_logs_path)
     saved_ckpt_path = os.path.join(args.saved_path, 'checkpoints')
     os.makedirs(saved_ckpt_path, exist_ok=True)
 
@@ -127,7 +137,8 @@ def main(args):
             global_step = epoch * len(train_dataloader) + train_step + 1
 
             if global_step % args.log_freq == 0:
-                save_summary(writer, loss_dict, global_step, 'train',
+                # save_summary(writer, loss_dict, global_step, 'train',
+                save_summary(loss_dict, global_step, 'train',
                              lr=optimizer.param_groups[0]['lr'], 
                              momentum=optimizer.param_groups[0]['betas'][0])
             train_step += 1
@@ -191,7 +202,8 @@ def main(args):
                 
                 global_step = epoch * len(val_dataloader) + val_step + 1
                 if global_step % args.log_freq == 0:
-                    save_summary(writer, loss_dict, global_step, 'val')
+                    # save_summary(writer, loss_dict, global_step, 'val')
+                    save_summary(loss_dict, global_step, 'val')
                 val_step += 1
         pointpillars.train()
 
